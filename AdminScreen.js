@@ -744,4 +744,4 @@ const blq = StyleSheet.create({
   slotChip: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6 },
   slotChipActive: { borderColor: RED, backgroundColor: '#2a0000' },
   bloqueoRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: CARD, borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: BORDER },
-})
+})// Admin dashboard
