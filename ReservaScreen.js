@@ -641,4 +641,4 @@ const mstyles = StyleSheet.create({
   btnCancelarText: { color: RED, fontSize: 12, fontWeight: '500' },
   btnCerrar: { borderWidth: 1, borderColor: BORDER, borderRadius: 8, padding: 12, alignItems: 'center' },
   btnCerrarText: { color: MUTED, fontSize: 14 },
-})
+})// Multi-step booking flow
