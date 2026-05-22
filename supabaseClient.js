@@ -17,4 +17,4 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
     persistSession: true,
     detectSessionInUrl: false,
   },
-})
+})// Supabase client for barberiatt app
