@@ -96,4 +96,4 @@ const styles = StyleSheet.create({
   tabIndicator: { position: 'absolute', top: 0, left: '20%', right: '20%', height: 2, backgroundColor: GOLD },
   backBtn: { padding: 16, alignItems: 'center', backgroundColor: '#1a1a1a', borderTopWidth: 1, borderTopColor: BORDER },
   backBtnText: { color: MUTED, fontSize: 13 },
-})
+})// Main app entry point
