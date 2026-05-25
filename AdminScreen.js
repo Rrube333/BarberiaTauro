@@ -2,11 +2,14 @@ import React, { useState, useEffect } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   StyleSheet, ActivityIndicator, Alert, SafeAreaView,
-  RefreshControl, Modal
+  RefreshControl, Modal, Image
 } from 'react-native'
+import * as ImagePicker from 'expo-image-picker'
 import { supabase } from './supabaseClient'
+import * as FileSystem from 'expo-file-system'
 
-const GOLD = '#C9A84C'
+
+const GOLD = '#e9e7e1'
 const DARK = '#111111'
 const SURFACE = '#1a1a1a'
 const CARD = '#222222'
@@ -53,33 +56,123 @@ function getSlots(inicio = '09:00', fin = '19:00', dur = 30) {
   return slots
 }
 
-// ─── Modal: Crear / Editar Barbero ───────────────────────────────────────────
+function initials(name) {
+  return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+}
+
+// ─── Avatar del barbero ───────────────────────────────────────
+function BarberoAvatar({ barbero, size = 48 }) {
+  const [error, setError] = useState(false)
+  if (barbero.foto_url && !error) {
+    return (
+      <Image
+        source={{ uri: barbero.foto_url }}
+        style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 2, borderColor: GOLD }}
+        onError={() => setError(true)}
+      />
+    )
+  }
+  return (
+    <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
+      <Text style={[styles.avatarText, { fontSize: size * 0.33 }]}>{initials(barbero.nombre)}</Text>
+    </View>
+  )
+}
+
+// ─── Modal: Crear / Editar Barbero con foto ───────────────────
 function BarberoModal({ visible, barbero, onClose, onSaved }) {
   const [nombre, setNombre] = useState('')
   const [especialidad, setEspecialidad] = useState('')
+  const [fotoUri, setFotoUri] = useState(null)
+  const [fotoUrl, setFotoUrl] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [uploadingFoto, setUploadingFoto] = useState(false)
 
   useEffect(() => {
     if (barbero) {
       setNombre(barbero.nombre || '')
       setEspecialidad(barbero.especialidad || '')
+      setFotoUrl(barbero.foto_url || null)
+      setFotoUri(null)
     } else {
-      setNombre('')
-      setEspecialidad('')
+      setNombre(''); setEspecialidad(''); setFotoUri(null); setFotoUrl(null)
     }
   }, [barbero, visible])
+
+  async function seleccionarFoto() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (status !== 'granted') {
+      Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería')
+      return
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    })
+    if (!result.canceled && result.assets[0]) {
+      setFotoUri(result.assets[0].uri)
+    }
+  }
+
+  async function subirFoto(uri) {
+  setUploadingFoto(true)
+
+  try {
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    })
+
+    const ext = uri.split('.').pop() || 'jpg'
+    const fileName = `barbero_${Date.now()}.${ext}`
+
+    const contentType = ext === 'png'
+      ? 'image/png'
+      : 'image/jpeg'
+
+    const { error: uploadError } = await supabase.storage
+      .from('barberos')
+      .upload(fileName, decode(base64), {
+        contentType,
+        upsert: true,
+      })
+
+    if (uploadError) throw uploadError
+
+    const { data } = supabase.storage
+      .from('barberos')
+      .getPublicUrl(fileName)
+
+    setUploadingFoto(false)
+
+    return data.publicUrl
+
+  } catch (e) {
+    setUploadingFoto(false)
+    Alert.alert('Error subiendo foto', e.message)
+    return null
+  }
+}
 
   async function guardar() {
     if (!nombre.trim()) { Alert.alert('Falta el nombre'); return }
     setLoading(true)
+
+    let urlFinal = fotoUrl
+    if (fotoUri) {
+      urlFinal = await subirFoto(fotoUri)
+      if (!urlFinal) { setLoading(false); return }
+    }
+
     let error
     if (barbero?.id) {
       ;({ error } = await supabase.from('barberos')
-        .update({ nombre: nombre.trim(), especialidad: especialidad.trim() || null })
+        .update({ nombre: nombre.trim(), especialidad: especialidad.trim() || null, foto_url: urlFinal })
         .eq('id', barbero.id))
     } else {
       ;({ error } = await supabase.from('barberos')
-        .insert({ nombre: nombre.trim(), especialidad: especialidad.trim() || null, activo: true }))
+        .insert({ nombre: nombre.trim(), especialidad: especialidad.trim() || null, foto_url: urlFinal, activo: true }))
     }
     setLoading(false)
     if (error) { Alert.alert('Error', error.message); return }
@@ -87,11 +180,36 @@ function BarberoModal({ visible, barbero, onClose, onSaved }) {
     onClose()
   }
 
+  const fotoMostrar = fotoUri || fotoUrl
+
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={modal.overlay}>
         <View style={modal.box}>
           <Text style={modal.title}>{barbero?.id ? 'EDITAR BARBERO' : 'NUEVO BARBERO'}</Text>
+
+          {/* Foto */}
+          <TouchableOpacity style={modal.fotoBtn} onPress={seleccionarFoto}>
+            {fotoMostrar
+              ? <Image source={{ uri: fotoMostrar }} style={modal.fotoPreview} />
+              : <View style={modal.fotoPlaceholder}>
+                  <Text style={{ fontSize: 32 }}>📷</Text>
+                  <Text style={{ color: MUTED, fontSize: 11, marginTop: 4 }}>Toca para agregar foto</Text>
+                </View>
+            }
+            {fotoMostrar && (
+              <View style={modal.fotoOverlay}>
+                <Text style={{ color: WHITE, fontSize: 11 }}>✏️ Cambiar</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {uploadingFoto && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <ActivityIndicator color={GOLD} size="small" />
+              <Text style={{ color: MUTED, fontSize: 12 }}>Subiendo foto...</Text>
+            </View>
+          )}
 
           <Text style={modal.label}>NOMBRE *</Text>
           <TextInput
@@ -116,8 +234,8 @@ function BarberoModal({ visible, barbero, onClose, onSaved }) {
               <Text style={modal.btnCancelText}>Cancelar</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[modal.btnSave, loading && { opacity: 0.5 }]}
-              onPress={guardar} disabled={loading}
+              style={[modal.btnSave, (loading || uploadingFoto) && { opacity: 0.5 }]}
+              onPress={guardar} disabled={loading || uploadingFoto}
             >
               {loading
                 ? <ActivityIndicator color="#111" />
@@ -131,7 +249,7 @@ function BarberoModal({ visible, barbero, onClose, onSaved }) {
   )
 }
 
-// ─── Modal: Historial de cliente ─────────────────────────────────────────────
+// ─── Modal: Historial de cliente ─────────────────────────────
 function HistorialModal({ visible, onClose }) {
   const [busqueda, setBusqueda] = useState('')
   const [resultados, setResultados] = useState([])
@@ -140,8 +258,7 @@ function HistorialModal({ visible, onClose }) {
 
   async function buscar() {
     if (!busqueda.trim()) return
-    setLoading(true)
-    setBuscado(true)
+    setLoading(true); setBuscado(true)
     const { data } = await supabase.from('citas')
       .select('*, barberos(nombre)')
       .ilike('cliente_nombre', `%${busqueda.trim()}%`)
@@ -151,19 +268,13 @@ function HistorialModal({ visible, onClose }) {
     setLoading(false)
   }
 
-  function cerrar() {
-    setBusqueda('')
-    setResultados([])
-    setBuscado(false)
-    onClose()
-  }
+  function cerrar() { setBusqueda(''); setResultados([]); setBuscado(false); onClose() }
 
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={modal.overlay}>
         <View style={[modal.box, { maxHeight: '85%' }]}>
           <Text style={modal.title}>HISTORIAL POR CLIENTE</Text>
-
           <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
             <TextInput
               style={[modal.input, { flex: 1, marginBottom: 0 }]}
@@ -177,37 +288,24 @@ function HistorialModal({ visible, onClose }) {
               <Text style={modal.btnSaveText}>🔍</Text>
             </TouchableOpacity>
           </View>
-
           <ScrollView style={{ maxHeight: 400 }}>
             {loading && <ActivityIndicator color={GOLD} style={{ marginTop: 20 }} />}
             {!loading && buscado && resultados.length === 0 && (
-              <Text style={{ color: MUTED, textAlign: 'center', marginTop: 20 }}>
-                No se encontraron citas
-              </Text>
+              <Text style={{ color: MUTED, textAlign: 'center', marginTop: 20 }}>No se encontraron citas</Text>
             )}
             {resultados.map(c => (
               <View key={c.id} style={hist.row}>
                 <View style={{ flex: 1 }}>
                   <Text style={hist.cliente}>{c.cliente_nombre}</Text>
-                  <Text style={hist.meta}>
-                    {c.barberos?.nombre} · {formatFecha(c.fecha)} · {c.hora_inicio?.slice(0, 5)}
-                  </Text>
-                  {c.cliente_contacto && (
-                    <Text style={hist.meta}>📱 {c.cliente_contacto}</Text>
-                  )}
+                  <Text style={hist.meta}>{c.barberos?.nombre} · {formatFecha(c.fecha)} · {c.hora_inicio?.slice(0, 5)}</Text>
+                  {c.cliente_contacto && <Text style={hist.meta}>📱 {c.cliente_contacto}</Text>}
                 </View>
-                <View style={[
-                  hist.badge,
-                  { borderColor: estadoColor[c.estado] || MUTED, backgroundColor: (estadoColor[c.estado] || MUTED) + '22' }
-                ]}>
-                  <Text style={[hist.badgeText, { color: estadoColor[c.estado] || MUTED }]}>
-                    {c.estado}
-                  </Text>
+                <View style={[hist.badge, { borderColor: estadoColor[c.estado] || MUTED, backgroundColor: (estadoColor[c.estado] || MUTED) + '22' }]}>
+                  <Text style={[hist.badgeText, { color: estadoColor[c.estado] || MUTED }]}>{c.estado}</Text>
                 </View>
               </View>
             ))}
           </ScrollView>
-
           <TouchableOpacity style={[modal.btnCancel, { marginTop: 12 }]} onPress={cerrar}>
             <Text style={modal.btnCancelText}>Cerrar</Text>
           </TouchableOpacity>
@@ -217,7 +315,7 @@ function HistorialModal({ visible, onClose }) {
   )
 }
 
-// ─── Modal: Bloquear días / horarios ─────────────────────────────────────────
+// ─── Modal: Bloqueos ─────────────────────────────────────────
 function BloqueoModal({ visible, onClose, barberos }) {
   const [barberoId, setBarberoId] = useState(null)
   const [fecha, setFecha] = useState(null)
@@ -225,13 +323,10 @@ function BloqueoModal({ visible, onClose, barberos }) {
   const [slotsBlock, setSlotsBlock] = useState([])
   const [bloqueos, setBloqueos] = useState([])
   const [loading, setLoading] = useState(false)
-
   const dias = getNextDays(30)
   const slots = getSlots()
 
-  useEffect(() => {
-    if (visible) cargarBloqueos()
-  }, [visible])
+  useEffect(() => { if (visible) cargarBloqueos() }, [visible])
 
   async function cargarBloqueos() {
     const { data } = await supabase.from('bloqueos').select('*, barberos(nombre)').order('fecha')
@@ -240,19 +335,17 @@ function BloqueoModal({ visible, onClose, barberos }) {
 
   async function guardar() {
     if (!barberoId || !fecha) { Alert.alert('Selecciona barbero y fecha'); return }
-    if (!bloqueoDia && slotsBlock.length === 0) { Alert.alert('Selecciona al menos un horario o activa día completo'); return }
+    if (!bloqueoDia && slotsBlock.length === 0) { Alert.alert('Selecciona horarios o activa día completo'); return }
     setLoading(true)
     const { error } = await supabase.from('bloqueos').insert({
-      barbero_id: barberoId,
-      fecha,
-      dia_completo: bloqueoDia,
+      barbero_id: barberoId, fecha, dia_completo: bloqueoDia,
       slots_bloqueados: bloqueoDia ? null : slotsBlock,
     })
     setLoading(false)
     if (error) { Alert.alert('Error', error.message); return }
     setBarberoId(null); setFecha(null); setBloqueoDia(false); setSlotsBlock([])
     cargarBloqueos()
-    Alert.alert('✓', 'Bloqueo guardado correctamente')
+    Alert.alert('✓ Bloqueo guardado')
   }
 
   async function eliminarBloqueo(id) {
@@ -260,93 +353,60 @@ function BloqueoModal({ visible, onClose, barberos }) {
     setBloqueos(prev => prev.filter(b => b.id !== id))
   }
 
-  function toggleSlot(s) {
-    setSlotsBlock(prev =>
-      prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]
-    )
-  }
-
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={modal.overlay}>
         <View style={[modal.box, { maxHeight: '90%' }]}>
           <Text style={modal.title}>BLOQUEAR DÍAS / HORARIOS</Text>
-
           <ScrollView style={{ maxHeight: '80%' }} showsVerticalScrollIndicator={false}>
             <Text style={modal.label}>BARBERO</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {barberos.filter(b => b.activo).map(b => (
-                  <TouchableOpacity
-                    key={b.id}
-                    style={[blq.chip, barberoId === b.id && blq.chipActive]}
-                    onPress={() => setBarberoId(b.id)}
-                  >
+                  <TouchableOpacity key={b.id} style={[blq.chip, barberoId === b.id && blq.chipActive]} onPress={() => setBarberoId(b.id)}>
                     <Text style={[blq.chipText, barberoId === b.id && { color: GOLD }]}>{b.nombre}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </ScrollView>
-
             <Text style={modal.label}>FECHA</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {dias.filter(d => !d.esDomingo).map(d => (
-                  <TouchableOpacity
-                    key={d.date}
-                    style={[blq.dateChip, fecha === d.date && blq.chipActive]}
-                    onPress={() => setFecha(d.date)}
-                  >
+                  <TouchableOpacity key={d.date} style={[blq.dateChip, fecha === d.date && blq.chipActive]} onPress={() => setFecha(d.date)}>
                     <Text style={[{ fontSize: 9, color: MUTED }, fecha === d.date && { color: GOLD }]}>{d.label}</Text>
                     <Text style={[{ fontSize: 18, color: WHITE, fontWeight: '700' }, fecha === d.date && { color: GOLD }]}>{d.num}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </ScrollView>
-
-            <TouchableOpacity
-              style={[blq.chip, bloqueoDia && blq.chipActive, { marginBottom: 14, alignSelf: 'flex-start' }]}
-              onPress={() => { setBloqueoDia(!bloqueoDia); setSlotsBlock([]) }}
-            >
+            <TouchableOpacity style={[blq.chip, bloqueoDia && blq.chipActive, { marginBottom: 14, alignSelf: 'flex-start' }]}
+              onPress={() => { setBloqueoDia(!bloqueoDia); setSlotsBlock([]) }}>
               <Text style={[blq.chipText, bloqueoDia && { color: GOLD }]}>🔒 Bloquear día completo</Text>
             </TouchableOpacity>
-
             {!bloqueoDia && (
               <>
                 <Text style={modal.label}>HORARIOS A BLOQUEAR</Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
                   {slots.map(s => (
-                    <TouchableOpacity
-                      key={s}
-                      style={[blq.slotChip, slotsBlock.includes(s) && blq.slotChipActive]}
-                      onPress={() => toggleSlot(s)}
-                    >
+                    <TouchableOpacity key={s} style={[blq.slotChip, slotsBlock.includes(s) && blq.slotChipActive]}
+                      onPress={() => setSlotsBlock(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])}>
                       <Text style={[{ fontSize: 11, color: MUTED }, slotsBlock.includes(s) && { color: RED }]}>{s}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               </>
             )}
-
-            <TouchableOpacity
-              style={[modal.btnSave, { marginBottom: 20 }, loading && { opacity: 0.5 }]}
-              onPress={guardar} disabled={loading}
-            >
-              {loading
-                ? <ActivityIndicator color="#111" />
-                : <Text style={modal.btnSaveText}>Guardar bloqueo</Text>
-              }
+            <TouchableOpacity style={[modal.btnSave, { marginBottom: 20 }, loading && { opacity: 0.5 }]} onPress={guardar} disabled={loading}>
+              {loading ? <ActivityIndicator color="#111" /> : <Text style={modal.btnSaveText}>Guardar bloqueo</Text>}
             </TouchableOpacity>
-
             {bloqueos.length > 0 && (
               <>
                 <Text style={[modal.label, { marginBottom: 10 }]}>BLOQUEOS ACTIVOS</Text>
                 {bloqueos.map(b => (
                   <View key={b.id} style={blq.bloqueoRow}>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ color: WHITE, fontSize: 13 }}>
-                        {b.barberos?.nombre} · {formatFecha(b.fecha)}
-                      </Text>
+                      <Text style={{ color: WHITE, fontSize: 13 }}>{b.barberos?.nombre} · {formatFecha(b.fecha)}</Text>
                       <Text style={{ color: MUTED, fontSize: 11, marginTop: 2 }}>
                         {b.dia_completo ? '🔒 Día completo' : `🕐 ${(b.slots_bloqueados || []).join(', ')}`}
                       </Text>
@@ -359,7 +419,6 @@ function BloqueoModal({ visible, onClose, barberos }) {
               </>
             )}
           </ScrollView>
-
           <TouchableOpacity style={[modal.btnCancel, { marginTop: 10 }]} onPress={onClose}>
             <Text style={modal.btnCancelText}>Cerrar</Text>
           </TouchableOpacity>
@@ -369,7 +428,7 @@ function BloqueoModal({ visible, onClose, barberos }) {
   )
 }
 
-// ─── Pantalla principal Admin ─────────────────────────────────────────────────
+// ─── Pantalla principal Admin ─────────────────────────────────
 export default function AdminScreen({ session }) {
   const [tab, setTab] = useState('citas')
   const [citas, setCitas] = useState([])
@@ -388,10 +447,7 @@ export default function AdminScreen({ session }) {
   async function loadAll() {
     setLoading(true)
     const [{ data: c }, { data: b }] = await Promise.all([
-      supabase.from('citas')
-        .select('*, barberos(nombre)')
-        .order('fecha', { ascending: false })
-        .order('hora_inicio', { ascending: true }),
+      supabase.from('citas').select('*, barberos(nombre)').order('fecha', { ascending: false }).order('hora_inicio', { ascending: true }),
       supabase.from('barberos').select('*').order('nombre'),
     ])
     if (c) setCitas(c)
@@ -399,21 +455,15 @@ export default function AdminScreen({ session }) {
     setLoading(false)
   }
 
-  async function onRefresh() {
-    setRefreshing(true)
-    await loadAll()
-    setRefreshing(false)
-  }
+  async function onRefresh() { setRefreshing(true); await loadAll(); setRefreshing(false) }
 
   async function cambiarEstado(id, estado) {
     Alert.alert('Cambiar estado', `¿Marcar como "${estado}"?`, [
       { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Confirmar', onPress: async () => {
-          await supabase.from('citas').update({ estado }).eq('id', id)
-          setCitas(prev => prev.map(c => c.id === id ? { ...c, estado } : c))
-        }
-      }
+      { text: 'Confirmar', onPress: async () => {
+        await supabase.from('citas').update({ estado }).eq('id', id)
+        setCitas(prev => prev.map(c => c.id === id ? { ...c, estado } : c))
+      }}
     ])
   }
 
@@ -423,24 +473,18 @@ export default function AdminScreen({ session }) {
   }
 
   async function eliminarBarbero(id, nombre) {
-    Alert.alert(
-      'Eliminar barbero',
-      `¿Eliminar a ${nombre}? Sus citas pasadas quedarán en el historial.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar', style: 'destructive', onPress: async () => {
-            const { error } = await supabase.from('barberos').delete().eq('id', id)
-            if (error) { Alert.alert('Error', error.message); return }
-            setBarberos(prev => prev.filter(b => b.id !== id))
-          }
-        }
-      ]
-    )
+    Alert.alert('Eliminar barbero', `¿Eliminar a ${nombre}?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Eliminar', style: 'destructive', onPress: async () => {
+        const { error } = await supabase.from('barberos').delete().eq('id', id)
+        if (error) { Alert.alert('Error', error.message); return }
+        setBarberos(prev => prev.filter(b => b.id !== id))
+      }}
+    ])
   }
 
   async function handleLogout() {
-    Alert.alert('Cerrar sesión', '¿Seguro que quieres salir?', [
+    Alert.alert('Cerrar sesión', '¿Seguro?', [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Salir', style: 'destructive', onPress: () => supabase.auth.signOut() }
     ])
@@ -460,9 +504,7 @@ export default function AdminScreen({ session }) {
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>ADMIN · TAURO</Text>
-          {session?.user?.email && (
-            <Text style={styles.headerEmail}>{session.user.email}</Text>
-          )}
+          {session?.user?.email && <Text style={styles.headerEmail}>{session.user.email}</Text>}
         </View>
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Text style={styles.logoutText}>Salir 🚪</Text>
@@ -478,20 +520,13 @@ export default function AdminScreen({ session }) {
         ))}
       </View>
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={GOLD} />}
-      >
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={GOLD} />}>
+
         {tab === 'citas' && (
           <View>
             <View style={styles.statGrid}>
-              {[
-                [String(citasHoy), 'Hoy'],
-                [String(citasPendientes), 'Pendientes'],
-                [String(citas.length), 'Total'],
-                [String(barberos.filter(b => b.activo).length), 'Barberos'],
-              ].map(([num, label]) => (
+              {[[String(citasHoy), 'Hoy'], [String(citasPendientes), 'Pendientes'], [String(citas.length), 'Total'], [String(barberos.filter(b => b.activo).length), 'Barberos']].map(([num, label]) => (
                 <View key={label} style={styles.statCard}>
                   <Text style={styles.statNum}>{num}</Text>
                   <Text style={styles.statLabel}>{label}</Text>
@@ -500,16 +535,10 @@ export default function AdminScreen({ session }) {
             </View>
 
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
-              <TouchableOpacity
-                style={[styles.quickBtn, { borderColor: GOLD }]}
-                onPress={() => setModalHistorial(true)}
-              >
+              <TouchableOpacity style={[styles.quickBtn, { borderColor: GOLD }]} onPress={() => setModalHistorial(true)}>
                 <Text style={[styles.quickBtnText, { color: GOLD }]}>🔍 Historial cliente</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.quickBtn, { borderColor: MUTED }]}
-                onPress={() => setModalBloqueo(true)}
-              >
+              <TouchableOpacity style={[styles.quickBtn, { borderColor: MUTED }]} onPress={() => setModalBloqueo(true)}>
                 <Text style={[styles.quickBtnText, { color: MUTED }]}>🔒 Bloquear días</Text>
               </TouchableOpacity>
             </View>
@@ -517,11 +546,7 @@ export default function AdminScreen({ session }) {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {['todos', 'confirmada', 'completada', 'cancelada'].map(est => (
-                  <TouchableOpacity
-                    key={est}
-                    style={[styles.filterChip, filtroEstado === est && styles.filterChipActive]}
-                    onPress={() => setFiltroEstado(est)}
-                  >
+                  <TouchableOpacity key={est} style={[styles.filterChip, filtroEstado === est && styles.filterChipActive]} onPress={() => setFiltroEstado(est)}>
                     <Text style={[styles.filterText, filtroEstado === est && { color: GOLD }]}>
                       {est === 'todos' ? 'Todos' : est.charAt(0).toUpperCase() + est.slice(1)}
                     </Text>
@@ -532,18 +557,11 @@ export default function AdminScreen({ session }) {
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity
-                  style={[styles.filterChip, filtroBarbero === 'todos' && styles.filterChipActive]}
-                  onPress={() => setFiltroBarbero('todos')}
-                >
+                <TouchableOpacity style={[styles.filterChip, filtroBarbero === 'todos' && styles.filterChipActive]} onPress={() => setFiltroBarbero('todos')}>
                   <Text style={[styles.filterText, filtroBarbero === 'todos' && { color: GOLD }]}>Todos</Text>
                 </TouchableOpacity>
                 {barberos.map(b => (
-                  <TouchableOpacity
-                    key={b.id}
-                    style={[styles.filterChip, filtroBarbero === b.id && styles.filterChipActive]}
-                    onPress={() => setFiltroBarbero(b.id)}
-                  >
+                  <TouchableOpacity key={b.id} style={[styles.filterChip, filtroBarbero === b.id && styles.filterChipActive]} onPress={() => setFiltroBarbero(b.id)}>
                     <Text style={[styles.filterText, filtroBarbero === b.id && { color: GOLD }]}>{b.nombre}</Text>
                   </TouchableOpacity>
                 ))}
@@ -559,36 +577,21 @@ export default function AdminScreen({ session }) {
                     <View style={styles.citaHeader}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.citaCliente}>{c.cliente_nombre}</Text>
-                        <Text style={styles.citaMeta}>
-                          {c.barberos?.nombre} · {formatFecha(c.fecha)} · {c.hora_inicio?.slice(0, 5)}
-                        </Text>
-                        {c.cliente_contacto && (
-                          <Text style={styles.citaMeta}>📱 {c.cliente_contacto}</Text>
-                        )}
+                        <Text style={styles.citaMeta}>{c.barberos?.nombre} · {formatFecha(c.fecha)} · {c.hora_inicio?.slice(0, 5)}</Text>
+                        {c.cliente_contacto && <Text style={styles.citaMeta}>📱 {c.cliente_contacto}</Text>}
                       </View>
-                      <View style={[
-                        styles.estadoBadge,
-                        { backgroundColor: (estadoColor[c.estado] || MUTED) + '22', borderColor: estadoColor[c.estado] || MUTED }
-                      ]}>
-                        <Text style={[styles.estadoText, { color: estadoColor[c.estado] || MUTED }]}>
-                          {c.estado}
-                        </Text>
+                      <View style={[styles.estadoBadge, { backgroundColor: (estadoColor[c.estado] || MUTED) + '22', borderColor: estadoColor[c.estado] || MUTED }]}>
+                        <Text style={[styles.estadoText, { color: estadoColor[c.estado] || MUTED }]}>{c.estado}</Text>
                       </View>
                     </View>
                     <View style={styles.citaActions}>
                       {c.estado !== 'completada' && (
-                        <TouchableOpacity
-                          style={[styles.actionBtn, { borderColor: GOLD }]}
-                          onPress={() => cambiarEstado(c.id, 'completada')}
-                        >
+                        <TouchableOpacity style={[styles.actionBtn, { borderColor: GOLD }]} onPress={() => cambiarEstado(c.id, 'completada')}>
                           <Text style={[styles.actionBtnText, { color: GOLD }]}>✓ Completar</Text>
                         </TouchableOpacity>
                       )}
                       {c.estado !== 'cancelada' && (
-                        <TouchableOpacity
-                          style={[styles.actionBtn, { borderColor: RED }]}
-                          onPress={() => cambiarEstado(c.id, 'cancelada')}
-                        >
+                        <TouchableOpacity style={[styles.actionBtn, { borderColor: RED }]} onPress={() => cambiarEstado(c.id, 'cancelada')}>
                           <Text style={[styles.actionBtnText, { color: RED }]}>✕ Cancelar</Text>
                         </TouchableOpacity>
                       )}
@@ -603,10 +606,7 @@ export default function AdminScreen({ session }) {
           <View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <Text style={styles.sectionTitle}>Barberos</Text>
-              <TouchableOpacity
-                style={styles.btnAdd}
-                onPress={() => { setBarberoEditar(null); setModalBarbero(true) }}
-              >
+              <TouchableOpacity style={styles.btnAdd} onPress={() => { setBarberoEditar(null); setModalBarbero(true) }}>
                 <Text style={styles.btnAddText}>+ Agregar</Text>
               </TouchableOpacity>
             </View>
@@ -616,11 +616,7 @@ export default function AdminScreen({ session }) {
               return (
                 <View key={b.id} style={styles.barberoCard}>
                   <View style={styles.barberoInfo}>
-                    <View style={[styles.avatar, !b.activo && { opacity: 0.4 }]}>
-                      <Text style={styles.avatarText}>
-                        {b.nombre.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
-                      </Text>
-                    </View>
+                    <BarberoAvatar barbero={b} size={52} />
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.barberoNombre, !b.activo && { color: MUTED }]}>{b.nombre}</Text>
                       <Text style={styles.barberoSpec}>{b.especialidad || 'Corte de cabello'}</Text>
@@ -628,24 +624,13 @@ export default function AdminScreen({ session }) {
                     </View>
                   </View>
                   <View style={{ gap: 6 }}>
-                    <TouchableOpacity
-                      style={[styles.actionBtn, { borderColor: GOLD }]}
-                      onPress={() => { setBarberoEditar(b); setModalBarbero(true) }}
-                    >
+                    <TouchableOpacity style={[styles.actionBtn, { borderColor: GOLD }]} onPress={() => { setBarberoEditar(b); setModalBarbero(true) }}>
                       <Text style={[styles.actionBtnText, { color: GOLD }]}>✏️ Editar</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionBtn, { borderColor: b.activo ? RED : GREEN }]}
-                      onPress={() => toggleBarbero(b.id, b.activo)}
-                    >
-                      <Text style={[styles.actionBtnText, { color: b.activo ? RED : GREEN }]}>
-                        {b.activo ? 'Desactivar' : 'Activar'}
-                      </Text>
+                    <TouchableOpacity style={[styles.actionBtn, { borderColor: b.activo ? RED : GREEN }]} onPress={() => toggleBarbero(b.id, b.activo)}>
+                      <Text style={[styles.actionBtnText, { color: b.activo ? RED : GREEN }]}>{b.activo ? 'Desactivar' : 'Activar'}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionBtn, { borderColor: '#555' }]}
-                      onPress={() => eliminarBarbero(b.id, b.nombre)}
-                    >
+                    <TouchableOpacity style={[styles.actionBtn, { borderColor: '#555' }]} onPress={() => eliminarBarbero(b.id, b.nombre)}>
                       <Text style={[styles.actionBtnText, { color: '#555' }]}>🗑 Eliminar</Text>
                     </TouchableOpacity>
                   </View>
@@ -656,21 +641,9 @@ export default function AdminScreen({ session }) {
         )}
       </ScrollView>
 
-      <BarberoModal
-        visible={modalBarbero}
-        barbero={barberoEditar}
-        onClose={() => setModalBarbero(false)}
-        onSaved={loadAll}
-      />
-      <HistorialModal
-        visible={modalHistorial}
-        onClose={() => setModalHistorial(false)}
-      />
-      <BloqueoModal
-        visible={modalBloqueo}
-        onClose={() => setModalBloqueo(false)}
-        barberos={barberos}
-      />
+      <BarberoModal visible={modalBarbero} barbero={barberoEditar} onClose={() => setModalBarbero(false)} onSaved={loadAll} />
+      <HistorialModal visible={modalHistorial} onClose={() => setModalHistorial(false)} />
+      <BloqueoModal visible={modalBloqueo} onClose={() => setModalBloqueo(false)} barberos={barberos} />
     </SafeAreaView>
   )
 }
@@ -687,7 +660,7 @@ const styles = StyleSheet.create({
   tabText: { fontSize: 13, color: MUTED, letterSpacing: 1, textTransform: 'uppercase' },
   tabTextActive: { color: GOLD },
   tabLine: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: GOLD },
-  sectionTitle: { fontSize: 20, letterSpacing: 2, color: GOLD, fontWeight: '700' },
+  sectionTitle: { fontSize: 18, letterSpacing: 2, color: GOLD, fontWeight: '700' },
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
   statCard: { flex: 1, minWidth: '44%', backgroundColor: SURFACE, borderWidth: 1, borderColor: BORDER, borderRadius: 10, padding: 14 },
   statNum: { fontSize: 28, color: GOLD, fontWeight: '700' },
@@ -708,8 +681,8 @@ const styles = StyleSheet.create({
   actionBtnText: { fontSize: 12, fontWeight: '500' },
   barberoCard: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 12, padding: 14, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   barberoInfo: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#2a2200', borderWidth: 2, borderColor: GOLD, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 16, color: GOLD, fontWeight: '700' },
+  avatar: { backgroundColor: '#2a2200', borderWidth: 2, borderColor: GOLD, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: GOLD, fontWeight: '700' },
   barberoNombre: { fontSize: 14, color: WHITE, fontWeight: '500' },
   barberoSpec: { fontSize: 11, color: MUTED, marginTop: 2 },
   btnAdd: { backgroundColor: GOLD, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
@@ -726,6 +699,10 @@ const modal = StyleSheet.create({
   btnCancelText: { color: MUTED, fontSize: 14 },
   btnSave: { flex: 1, backgroundColor: GOLD, borderRadius: 8, padding: 12, alignItems: 'center' },
   btnSaveText: { color: '#111', fontSize: 14, fontWeight: '700' },
+  fotoBtn: { alignSelf: 'center', marginBottom: 16, borderRadius: 60, overflow: 'hidden' },
+  fotoPreview: { width: 100, height: 100, borderRadius: 50, borderWidth: 2, borderColor: GOLD },
+  fotoPlaceholder: { width: 100, height: 100, borderRadius: 50, backgroundColor: CARD, borderWidth: 2, borderColor: BORDER, alignItems: 'center', justifyContent: 'center' },
+  fotoOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#00000088', padding: 6, alignItems: 'center' },
 })
 
 const hist = StyleSheet.create({
@@ -744,4 +721,4 @@ const blq = StyleSheet.create({
   slotChip: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6 },
   slotChipActive: { borderColor: RED, backgroundColor: '#2a0000' },
   bloqueoRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: CARD, borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: BORDER },
-})// Admin dashboard
+})

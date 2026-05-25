@@ -6,7 +6,7 @@ import {
 } from 'react-native'
 import { supabase } from './supabaseClient'
 
-const GOLD = '#C9A84C'
+const GOLD = '#eceae2'
 const DARK = '#111111'
 const CARD = '#1a1a1a'
 const BORDER = '#333333'
@@ -45,7 +45,7 @@ export default function LoginScreen() {
         {/* Logo / Header */}
         <View style={styles.hero}>
           <View style={styles.logoCircle}>
-            <Text style={styles.logoIcon}>✂️</Text>
+            <Text style={styles.logoIcon}></Text>
           </View>
           <Text style={styles.title}>TAURO</Text>
           <Text style={styles.subtitle}>BARBERÍA · PANEL ADMIN</Text>
@@ -86,7 +86,7 @@ export default function LoginScreen() {
                 style={styles.eyeBtn}
                 onPress={() => setShowPass(!showPass)}
               >
-                <Text style={styles.eyeIcon}>{showPass ? '🙈' : '👁️'}</Text>
+                <Text style={styles.eyeIcon}>{showPass ? '' : ''}</Text>
               </TouchableOpacity>
             </View>
           </View>

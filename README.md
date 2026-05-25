@@ -1,1 +1,4 @@
-# Barberiatt\nApp de reservas para barbería usando React Native + Supabase
+Esneider Santiago Snachez Rivero
+Ruben DariO Tarazona Barranco
+
+

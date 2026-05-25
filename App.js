@@ -62,13 +62,13 @@ export default function App() {
       {/* Bottom Tab Bar */}
       <View style={styles.tabBar}>
         <TouchableOpacity style={styles.tabItem} onPress={() => setScreen('reserva')}>
-          <Text style={styles.tabIcon}>✂️</Text>
+          <Text style={styles.tabIcon}></Text>
           <Text style={[styles.tabLabel, screen === 'reserva' && styles.tabLabelActive]}>Reservar</Text>
           {screen === 'reserva' && <View style={styles.tabIndicator} />}
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.tabItem} onPress={() => setScreen('admin')}>
-          <Text style={styles.tabIcon}>📋</Text>
+          <Text style={styles.tabIcon}></Text>
           <Text style={[styles.tabLabel, screen === 'admin' && styles.tabLabelActive]}>Admin</Text>
           {screen === 'admin' && <View style={styles.tabIndicator} />}
         </TouchableOpacity>

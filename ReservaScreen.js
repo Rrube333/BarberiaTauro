@@ -6,7 +6,7 @@ import {
 } from 'react-native'
 import { supabase } from './supabaseClient'
 
-const GOLD = '#C9A84C'
+const GOLD = '#ecebe7'
 const DARK = '#111111'
 const SURFACE = '#1a1a1a'
 const CARD = '#222222'
@@ -174,10 +174,10 @@ function CancelarCitaModal({ visible, onClose }) {
                 <View style={{ flex: 1 }}>
                   <Text style={mstyles.citaNombre}>{c.cliente_nombre}</Text>
                   <Text style={mstyles.citaMeta}>
-                    ✂️ {c.barberos?.nombre}
+                     {c.barberos?.nombre}
                   </Text>
                   <Text style={mstyles.citaMeta}>
-                    📅 {formatFecha(c.fecha)} · {c.hora_inicio?.slice(0, 5)} hrs
+                     {formatFecha(c.fecha)} · {c.hora_inicio?.slice(0, 5)} hrs
                   </Text>
                 </View>
                 <TouchableOpacity
