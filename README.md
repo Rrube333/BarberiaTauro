@@ -1,22 +1,18 @@
 Esneider Santiago Sanchez Rivero
 Ruben Dario Tarazona Barranco
 
-
 # Tauro Barbería App
 
 Aplicación móvil desarrollada en **React Native con Expo y Supabase** que permite a los clientes reservar citas en línea y al administrador gestionar la barbería desde su celular.
-
-
 
 ## Descripción del proyecto
 
 Tauro Barbería App es una app móvil creada para la barbería **Tauro**, ubicada en Bucaramanga, Santander. Su objetivo es eliminar las reservas por WhatsApp o llamada, permitiendo a los clientes elegir su barbero, fecha y hora disponible directamente desde la app. El administrador tiene un panel completo para gestionar citas, barberos y horarios en tiempo real.
 
-
-
 ## Instalación y configuración
 
 ### Requisitos previos
+
 - Node.js v18 o superior
 - npm o npx
 - Expo Go instalado en tu celular (Android o iOS)
@@ -25,17 +21,20 @@ Tauro Barbería App es una app móvil creada para la barbería **Tauro**, ubicad
 ### Pasos para instalar
 
 1. Clona o descarga el proyecto:
+
 ```bash
 git clone <url-del-repositorio>
 cd barberiatt
 ```
 
 2. Instala las dependencias:
+
 ```bash
 npm install
 ```
 
 3. Instala las librerías adicionales:
+
 ```bash
 npx expo install react-native-maps expo-image-picker
 ```
@@ -46,9 +45,10 @@ npx expo install react-native-maps expo-image-picker
    - Ve a **SQL Editor** y ejecuta el archivo `supabase_setup.sql` incluido en el proyecto
    - Ve a **Settings → API** y copia tu **Project URL** y **anon public key**
    - Abre `supabaseClient.js` y reemplaza:
+
 ```js
-const SUPABASE_URL  = 'https://tu-proyecto.supabase.co'
-const SUPABASE_ANON = 'tu-anon-key'
+const SUPABASE_URL = "https://tu-proyecto.supabase.co";
+const SUPABASE_ANON = "tu-anon-key";
 ```
 
 5. Agrega tu logo:
@@ -59,6 +59,7 @@ const SUPABASE_ANON = 'tu-anon-key'
    - Ingresa tu email y contraseña de admin
 
 7. Inicia el proyecto:
+
 ```bash
 npx expo start
 ```
@@ -91,15 +92,15 @@ barberiatt/
 
 ## Librerías utilizadas
 
-| Librería | Versión | Para qué se usa |
-|---|---|---|
-| react-native | 0.81+ | Framework base de la app móvil |
-| expo | 54+ | Herramienta para correr y compilar la app |
-| @supabase/supabase-js | 2+ | Conexión a la base de datos y autenticación |
-| @react-native-async-storage/async-storage | 2+ | Persistencia de sesión del administrador |
-| expo-secure-store | 15+ | Almacenamiento seguro de credenciales |
-| react-native-maps | — | Mapa interactivo con la ubicación de la barbería |
-| expo-image-picker | — | Selección de fotos de perfil para los barberos |
+| Librería                                  | Versión | Para qué se usa                                  |
+| ----------------------------------------- | ------- | ------------------------------------------------ |
+| react-native                              | 0.81+   | Framework base de la app móvil                   |
+| expo                                      | 54+     | Herramienta para correr y compilar la app        |
+| @supabase/supabase-js                     | 2+      | Conexión a la base de datos y autenticación      |
+| @react-native-async-storage/async-storage | 2+      | Persistencia de sesión del administrador         |
+| expo-secure-store                         | 15+     | Almacenamiento seguro de credenciales            |
+| react-native-maps                         | —       | Mapa interactivo con la ubicación de la barbería |
+| expo-image-picker                         | —       | Selección de fotos de perfil para los barberos   |
 
 ---
 
@@ -108,60 +109,74 @@ barberiatt/
 **Supabase** — Backend as a Service con PostgreSQL  
 URL del proyecto: `https://tu-proyecto.supabase.co`
 
-| Tabla | Descripción |
-|---|---|
+| Tabla      | Descripción                                                         |
+| ---------- | ------------------------------------------------------------------- |
 | `barberos` | Barberos registrados con nombre, especialidad, foto y estado activo |
-| `citas` | Reservas de clientes con barbero, fecha, hora y estado |
-| `bloqueos` | Días u horarios bloqueados por el administrador |
+| `citas`    | Reservas de clientes con barbero, fecha, hora y estado              |
+| `bloqueos` | Días u horarios bloqueados por el administrador                     |
 
 ### Seguridad (Row Level Security)
 
-| Tabla | Público (anon) | Admin (authenticated) |
-|---|---|---|
+| Tabla    | Público (anon)   | Admin (authenticated)              |
+| -------- | ---------------- | ---------------------------------- |
 | barberos | Solo ver activos | Ver todos, crear, editar, eliminar |
-| citas | Ver y crear | Actualizar estado, eliminar |
-| bloqueos | Ver | Crear y eliminar |
+| citas    | Ver y crear      | Actualizar estado, eliminar        |
+| bloqueos | Ver              | Crear y eliminar                   |
 
 ---
 
 ## Conceptos técnicos implementados
 
 ### useState y useEffect
+
 Maneja todos los estados locales de la app: barbero seleccionado, fecha, hora, slots ocupados y bloqueados.
 
 ```js
-const [barbero, setBarbero] = useState(null)
-const [takenSlots, setTakenSlots] = useState([])
-const [blockedSlots, setBlockedSlots] = useState([])
+const [barbero, setBarbero] = useState(null);
+const [takenSlots, setTakenSlots] = useState([]);
+const [blockedSlots, setBlockedSlots] = useState([]);
 
 useEffect(() => {
-  if (!barbero || !fecha) return
+  if (!barbero || !fecha) return;
   // Carga slots ocupados y bloqueos al cambiar barbero o fecha
   Promise.all([
-    supabase.from('citas').select('hora_inicio').eq('barbero_id', barbero.id).eq('fecha', fecha),
-    supabase.from('bloqueos').select('*').eq('barbero_id', barbero.id).eq('fecha', fecha),
-  ]).then(([citas, bloqueos]) => { /* actualiza estado */ })
-}, [barbero, fecha])
+    supabase
+      .from("citas")
+      .select("hora_inicio")
+      .eq("barbero_id", barbero.id)
+      .eq("fecha", fecha),
+    supabase
+      .from("bloqueos")
+      .select("*")
+      .eq("barbero_id", barbero.id)
+      .eq("fecha", fecha),
+  ]).then(([citas, bloqueos]) => {
+    /* actualiza estado */
+  });
+}, [barbero, fecha]);
 ```
 
 ### Supabase Auth
+
 Gestiona la autenticación del administrador con persistencia de sesión usando AsyncStorage.
 
 ```js
-supabase.auth.signInWithPassword({ email, password })
-supabase.auth.signOut()
-supabase.auth.onAuthStateChange((_event, session) => setSession(session))
+supabase.auth.signInWithPassword({ email, password });
+supabase.auth.signOut();
+supabase.auth.onAuthStateChange((_event, session) => setSession(session));
 ```
 
 ### Supabase Storage
+
 Permite subir y servir fotos de perfil de los barberos.
 
 ```js
-await supabase.storage.from('barberos').upload(fileName, blob)
-const { data } = supabase.storage.from('barberos').getPublicUrl(fileName)
+await supabase.storage.from("barberos").upload(fileName, blob);
+const { data } = supabase.storage.from("barberos").getPublicUrl(fileName);
 ```
 
 ### Row Level Security (RLS)
+
 Protege los datos en Supabase según el tipo de usuario (anon o authenticated).
 
 ```sql
@@ -173,6 +188,7 @@ CREATE POLICY "citas_admin_actualizar"
 ```
 
 ### Auto-limpieza con pg_cron
+
 Elimina automáticamente citas completadas y canceladas con más de 3 meses de antigüedad.
 
 ```sql
@@ -189,6 +205,7 @@ SELECT cron.schedule(
 ## Requerimientos funcionales implementados
 
 ### Pantalla del cliente
+
 - [x] Selección de barbero con foto de perfil
 - [x] Selección de fecha (próximos 14 días, sin domingos)
 - [x] Visualización de horarios disponibles, ocupados y bloqueados
@@ -198,6 +215,7 @@ SELECT cron.schedule(
 - [x] Cancelar cita buscando por nombre y teléfono
 
 ### Panel de administrador
+
 - [x] Login seguro con email y contraseña
 - [x] Dashboard con estadísticas (citas hoy, pendientes, total)
 - [x] Filtro de citas por barbero y estado

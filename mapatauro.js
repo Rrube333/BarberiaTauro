@@ -1,10 +1,10 @@
-import React from 'react';
-import { View, StyleSheet, Text } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import React from "react";
+import { View, StyleSheet, Text } from "react-native";
+import MapView, { Marker } from "react-native-maps";
 
-const GOLD = '#e9e7e1';
-const DARK = '#111111';
-const CARD = '#222222';
+const GOLD = "#e9e7e1";
+const DARK = "#111111";
+const CARD = "#222222";
 
 export default function MapaTauros() {
   const ubicacion = {
@@ -39,14 +39,14 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: CARD,
     borderRadius: 12,
-    overflow: 'hidden',
+    overflow: "hidden",
     marginVertical: 10,
     padding: 10,
   },
   titulo: {
     color: GOLD,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 8,
     paddingHorizontal: 4,
   },
