@@ -30,7 +30,7 @@ export default function App() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Mientras verifica si hay sesión guardada
+  // Mientras verificSDAsa si hay sesión guardada
   if (loadingAuth) {
     return (
       <View style={styles.loadingBox}>

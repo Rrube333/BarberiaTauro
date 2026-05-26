@@ -5,6 +5,7 @@ import {
   Alert, SafeAreaView, Modal
 } from 'react-native'
 import { supabase } from './supabaseClient'
+import MapView, { Marker } from 'react-native-maps'
 
 const GOLD = '#ecebe7'
 const DARK = '#111111'
@@ -17,6 +18,7 @@ const RED = '#e57373'
 
 function initials(name) {
   return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+  
 }
 
 function getNextDays(n = 14) {
@@ -521,6 +523,27 @@ export default function ReservaScreen() {
           <View>
             <Text style={styles.sectionTitle}>Confirmar cita</Text>
             <View style={styles.summaryCard}>
+               <Text style={[styles.formLabel, { marginBottom: 8, marginTop: 4 }]}>
+      📍 NUESTRA UBICACIÓN
+    </Text>
+    <MapView
+      style={{ height: 180, borderRadius: 10, marginBottom: 20 }}
+      initialRegion={{
+        latitude: 7.137170985223739,
+        longitude: -73.12405839098969,
+        latitudeDelta: 0.002,
+        longitudeDelta: 0.002,
+      }}
+      scrollEnabled={false}
+      zoomEnabled={false}
+    >
+      <Marker
+        coordinate={{ latitude: 7.137170985223739, longitude: -73.12405839098969 }}
+        title="Tauros Barbería"
+        description="Te esperamos aquí"
+      />
+    </MapView>
+    
               {[
                 ['Barbero', barbero?.nombre],
                 ['Fecha', fecha ? new Date(fecha + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }) : ''],
