@@ -2,7 +2,7 @@ Esneider Santiago Sanchez Rivero
 Ruben Dario Tarazona Barranco
 
 administrador
-Usuario: tarzonaruben12@gmail.com
+Usuario: tarazonaruben12@gmail.com
 Contraseña: 1065619562Rt
 
 # Tauro Barbería App
