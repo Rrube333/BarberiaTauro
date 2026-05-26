@@ -1,6 +1,10 @@
 Esneider Santiago Sanchez Rivero
 Ruben Dario Tarazona Barranco
 
+administrador
+Usuario: tarzonaruben12@gmail.com
+Contraseña: 1065619562Rt
+
 # Tauro Barbería App
 
 Aplicación móvil desarrollada en **React Native con Expo y Supabase** que permite a los clientes reservar citas en línea y al administrador gestionar la barbería desde su celular.
